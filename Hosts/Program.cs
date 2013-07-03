@@ -14,6 +14,7 @@ namespace Hosts
         static void Main(string[] args)
         {
             HostFileManager manager = HostFileManager.GetInstance();
+            HostFile host = null;
 
             switch (args.Length)
             {
@@ -21,6 +22,7 @@ namespace Hosts
                     ShowSettings();
                     break;
                 case 1:
+                    #region one parameter
                     switch (args[0].Trim().ToLower())
                     {
                         case "info":
@@ -48,28 +50,38 @@ namespace Hosts
                             break;
                     }
                     break;
+                    #endregion
                 case 2:
+                    #region two parameters
                     string param = args[1];
-                    HostFile host = null;
 
                     switch (args[0].Trim().ToLower())
                     {
                         case "info":
+                            #region hosts info [all/sys]
                             if (param.Trim().ToLower() == "all")
                             {
                                 ShowSettings(true);
+                            }
+                            else if (param.Trim().ToLower() == "sys")
+                            {
+                                ShowSettings(true, true);
                             }
                             else
                             {
                                 ShowError();
                             }
                             break;
+                            #endregion
                         case "change":
-                            host = manager.HostFileList.SingleOrDefault(h => h.Description.ToLower() == param.ToLower());
-                            manager.FlushDNS();
+                            #region hosts change [host file name]
+                            host = manager.GetHostFile(param);
                             ShowMessage(manager.SwapHostFiles(host) + "\n");
+                            manager.FlushDNS();
                             break;
+                            #endregion
                         case "new":
+                            #region hosts new [host file name]
                             host = new HostFile();
                             host.Description = param;
                             ShowMessage("Please set <DisplayCharacter>:");
@@ -78,23 +90,25 @@ namespace Hosts
                             host.PointsToLive = (Console.ReadLine().Trim().ToLower() == "yes");
                             manager.NewHostFile(host.Description, host.DisplayCharacter, host.PointsToLive, "");
                             ShowMessage(string.Format("New hosts file [{0}] created.\n", host.Description));
-                            EditFile(manager.HostFileList.Last().Path);
+                            EditFile(manager.HostFileList.Last().FullPath);
                             break;
+                            #endregion
                         case "edit":
+                            #region hosts edit [host file name]
                             if (param.ToLower() == "global")
                             {
-                                EditFile(HostFileManager.GetInstance().GlobalHostFile);
+                                EditFile(manager.GlobalHostFile);
                             }
                             else if (param.ToLower() == "temp")
                             {
-                                EditFile(HostFileManager.GetInstance().SystemHostFile);
+                                EditFile(manager.SystemHostFile);
                             }
                             else
                             {
-                                host = manager.HostFileList.SingleOrDefault(h => h.Description.ToLower() == param.ToLower());
+                                host = manager.GetHostFile(param);
                                 if (host != null)
                                 {
-                                    EditFile(Path.Combine(HostFileManager.GetInstance().CurrentDirectory, host.Path));
+                                    EditFile(host.FullPath);
                                 }
                                 else
                                 {
@@ -102,8 +116,10 @@ namespace Hosts
                                 }
                             }
                             break;
+                            #endregion
                         case "delete":
-                            host = manager.HostFileList.SingleOrDefault(h => h.Description.ToLower() == param.ToLower());
+                            #region hosts delete [host file name]
+                            host = manager.GetHostFile(param);
                             if (host != null)
                             {
                                 manager.DeleteHostFile(host.Description);
@@ -113,8 +129,10 @@ namespace Hosts
                                 ShowMessage("The hosts file doesn't exist.\n");
                             }
                             break;
+                            #endregion
                         case "remove":
-                            host = manager.HostFileList.SingleOrDefault(h => h.Description.ToLower() == param.ToLower());
+                            #region hosts remove [host file name]
+                            host = manager.GetHostFile(param);
                             if (host != null)
                             {
                                 manager.RecycleHostFile(host.Description, true);
@@ -124,8 +142,10 @@ namespace Hosts
                                 ShowMessage("The hosts file doesn't exist.\n");
                             }
                             break;
+                            #endregion
                         case "restore":
-                            host = manager.HostFileList.SingleOrDefault(h => h.Description.ToLower() == param.ToLower());
+                            #region hosts restore [host file name]
+                            host = manager.GetHostFile(param);
                             if (host != null)
                             {
                                 manager.RecycleHostFile(host.Description, false);
@@ -135,11 +155,40 @@ namespace Hosts
                                 ShowMessage("The hosts file doesn't exist.\n");
                             }
                             break;
+                            #endregion
                         default:
                             ShowError();
                             break;
                     }
                     break;
+                    #endregion
+                case 3:
+                    #region three parameters
+                    string oldName = args[1], newName = args[2];
+
+                    switch (args[0].Trim().ToLower())
+                    {
+                        case "rename":
+                            #region hosts rename [old host file name] [new host file name]
+                            host = manager.GetHostFile(oldName);
+                            string content = manager.GetHostContent(oldName);
+
+                            if (host != null && content != manager.ErrorSign)
+                            {
+                                manager.EditHostFile(oldName, newName, host.DisplayCharacter, host.PointsToLive, content);
+                            }
+                            else
+                            {
+                                ShowMessage("The hosts file doesn't exist.\n");
+                            }
+                            break;
+                            #endregion
+                        default:
+                            ShowError();
+                            break;
+                    }
+                    break;
+                    #endregion
                 default:
                     ShowError();
                     break;
@@ -178,10 +227,15 @@ namespace Hosts
 
         private static void ShowSettings()
         {
-            ShowSettings(false);
+            ShowSettings(false, false);
         }
 
         private static void ShowSettings(bool isDetail)
+        {
+            ShowSettings(isDetail, false);
+        }
+
+        private static void ShowSettings(bool isDetail, bool isSys)
         {
             try
             {
@@ -199,7 +253,14 @@ namespace Hosts
                     if (isDetail)
                     {
                         ShowMessage(new string('=', 79));
-                        ShowMessage(File.ReadAllText(Path.Combine(HostFileManager.GetInstance().CurrentDirectory, envHost.Path)) + "\n");
+                        if (isSys)
+                        {
+                            ShowMessage(string.Join("\n", File.ReadAllLines(HostFileManager.GetInstance().SystemHostFile).Where(l => !l.StartsWith("#") && l.Trim().Length > 0).ToArray()) + "\n");
+                        }
+                        else
+                        {
+                            ShowMessage(envHost.Content + "\n");
+                        }
                     }
                 }
             }
@@ -251,12 +312,13 @@ namespace Hosts
             ShowMessage("            \tTemp, that means the system hosts file will be edited.");
             ShowMessage("        flush\tFlush DNS.");
             ShowMessage("        help\tGet help on this command.");
-            ShowMessage("        info\tShow current hosts file name. With [<param> all], will show.");
+            ShowMessage("        info\tShow current hosts file name. With [<param> all/sys], will show");
             ShowMessage("            \tthe detailed settings.");
             ShowMessage("        list\tList all hosts files");
             ShowMessage("        new\tCreate a new hosts file with a name [<param> hosts file name].");
             ShowMessage("        remove\tMark a hosts file as removed, cannot be used with [change]");
             ShowMessage("              \toperation.");
+            ShowMessage("        rename\tRename a hosts file name.");
             ShowMessage("        reset\tReset system hosts file, remove all customized settings but");
             ShowMessage("             \tglobal one.");
             ShowMessage("        restore\tMark a hosts file as available.\n");

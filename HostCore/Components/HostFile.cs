@@ -10,5 +10,9 @@ namespace HostCore.Components
         public string DisplayCharacter;
         public bool PointsToLive;
         public bool IsDelete;
+        [NonSerialized]
+        public string FullPath;
+        [NonSerialized]
+        public string Content;
     }
 }

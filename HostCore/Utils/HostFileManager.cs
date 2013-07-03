@@ -29,6 +29,7 @@ namespace HostCore.Utils
             GlobalHostFile = Path.Combine(Path.Combine(CurrentDirectory, HostsPath), @"HostEntries.host");
             HostFileConfigFile = Path.Combine(CurrentDirectory, @"Hosts.cfg");
             IsHostFilePointToLive = false;
+            ErrorSign = "#N/A#";
 
             if (!Directory.Exists(Path.Combine(CurrentDirectory, HostsPath)))
             {
@@ -58,6 +59,12 @@ namespace HostCore.Utils
                 if (hostFiles == null)
                 {
                     hostFiles = ObjectSerializer<List<HostFile>>.Load(HostFileConfigFile);
+
+                    foreach (HostFile host in hostFiles)
+                    {
+                        host.FullPath = Path.Combine(CurrentDirectory, host.Path);
+                        host.Content = File.ReadAllText(host.FullPath);
+                    }
                 }
 
                 return hostFiles;
@@ -75,6 +82,8 @@ namespace HostCore.Utils
         public string HostsPath { get; private set; }
 
         public string CurrentDirectory { get; private set; }
+
+        public string ErrorSign { get; private set; }
 
         #endregion
 
@@ -94,6 +103,8 @@ namespace HostCore.Utils
             host.Path = Path.Combine(HostsPath, name + ".host");
             host.PointsToLive = pointToLive;
             host.IsDelete = false;
+            host.FullPath = Path.Combine(CurrentDirectory, host.Path);
+            host.Content = content;
 
             File.WriteAllText(Path.Combine(CurrentDirectory, host.Path), content);
 
@@ -107,16 +118,18 @@ namespace HostCore.Utils
             if (newName != "Global Host File" && oldName != "Global Host File" 
                 && newName != "System Host File" && oldName != "System Host File")
             {
-                HostFile host = HostFileList.SingleOrDefault(h => h.Description == oldName);
+                HostFile host = GetHostFile(oldName);
 
                 if (host != null)
                 {
                     int index = HostFileList.IndexOf(host);
-                    string oldFile = Path.Combine(CurrentDirectory, host.Path);
+                    string oldFile = host.FullPath;
                     string newFile = Path.Combine(CurrentDirectory, HostsPath, newName + ".host");
 
                     host.Description = newName;
                     host.Path = Path.Combine(HostsPath, newName + ".host");
+                    host.FullPath = Path.Combine(CurrentDirectory, host.Path);
+                    host.Content = content;
                     if (displayingChar.Length > 0)
                     {
                         host.DisplayCharacter = displayingChar;
@@ -155,16 +168,14 @@ namespace HostCore.Utils
             if (hosts.Count > 0)
             {
                 int index = HostFileList.IndexOf(hosts[0]);
-                string path = Path.Combine(CurrentDirectory, HostsPath, name + ".host");
+                string path = hosts[0].FullPath;
 
                 if (File.Exists(path))
                 {
                     File.Delete(path);
                 }
-                else
-                {
-                    HostFileList.RemoveAt(index);
-                }
+
+                HostFileList.RemoveAt(index);
 
                 SaveHostFilesToFile();
             }
@@ -310,6 +321,27 @@ namespace HostCore.Utils
             catch (Exception ex)
             {
                 return;
+            }
+        }
+
+        public HostFile GetHostFile(string name)
+        {
+            HostFile host = HostFileList.SingleOrDefault(h => h.Description.ToLower() == name.ToLower());
+
+            return host;
+        }
+
+        public string GetHostContent(string name)
+        {
+            HostFile host = GetHostFile(name);
+
+            if (host == null)
+            {
+                return ErrorSign;
+            }
+            else
+            {
+                return host.Content;
             }
         }
 
